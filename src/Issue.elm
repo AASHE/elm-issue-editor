@@ -28,6 +28,29 @@ type alias Issue =
     , textTemplateName : String
     }
 
+
+emptyIssue =
+    { id = 0
+    , pubDate = ""
+    , sections = []
+    , name = ""
+    , subject = ""
+    , fromName = ""
+    , fromEmail = ""
+    , replyToEmail = ""
+    , organizationName = ""
+    , addressLine1 = ""
+    , addressLine2 = ""
+    , addressLine3 = ""
+    , city = ""
+    , state = ""
+    , internationalState = ""
+    , postalCode = ""
+    , country = ""
+    , htmlTemplateName = ""
+    , textTemplateName = ""
+    }
+
 decodeIssue : Json.Decode.Decoder Issue
 decodeIssue =
     Json.Decode.Pipeline.decode Issue

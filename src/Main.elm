@@ -1,10 +1,16 @@
+module Main exposing (main)
+
 import Html exposing (..)
-import Html.Events exposing (onClick)
 import Html.Attributes exposing (..)
 import Http exposing (..)
-import Utils
-
-import Issue exposing (Issue, decodeIssue)
+import Bootstrap.Accordion as Accordion
+import Bootstrap.Card as Card
+import Bootstrap.Card.Block as Block
+import Bootstrap.CDN as CDN
+import Bootstrap.Grid as Grid
+import Issue exposing (Issue, decodeIssue, emptyIssue)
+import Post exposing (Post)
+import Section exposing (Section)
 
 
 main : Program Never Model Msg
@@ -17,18 +23,25 @@ main =
         }
 
 
+
 -- Model
 
 
 type alias Model =
-    { issues : List Issue
+    { issue : Issue
     , status : String
+    , accordionState : Accordion.State
     }
 
 
 init : ( Model, Cmd Msg )
 init =
-    (Model [] "Initial", (getIssue 515))
+    ( { issue = emptyIssue -- TODO - smells
+      , status = ""
+      , accordionState = Accordion.initialState
+      }
+    , (getIssue 515)
+    )
 
 
 
@@ -36,20 +49,24 @@ init =
 
 
 type Msg
-    = NewIssue (Result Http.Error Issue)
-    | InitIssue
-
+    = LoadIssue (Result Http.Error Issue)
+    | AccordionMsg Accordion.State
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        NewIssue (Ok issue) ->
-            ({ model | issues = List.append model.issues [issue] }, Cmd.none)
-        NewIssue (Err msg) ->
-            ({ model | status = toString msg }, Cmd.none)
-        InitIssue ->
-            (model, getIssue 515)
+        LoadIssue (Ok issue) ->
+            ( { model | issue = issue }, Cmd.none )
+
+        LoadIssue (Err msg) ->
+            ( { model | status = toString msg }, Cmd.none )
+
+        AccordionMsg state ->
+            ( { model | accordionState = state }
+            , Cmd.none
+            )
+
 
 
 -- View
@@ -57,19 +74,55 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-    div []
-        [ button [ onClick InitIssue ] [ text "Load Data" ]
-        , text model.status
-        , div [] ( List.map renderIssue model.issues )
+    Grid.container []
+        [ CDN.stylesheet
+        , Grid.row []
+            [ Grid.col []
+                [ text model.status
+                , renderIssue model.issue model.accordionState
+                ]
+            ]
         ]
 
-renderIssue issue =
-    ul [] [ li [] [ text issue.pubDate ]
-          , div [] ( List.map renderSection issue.sections )
-          ]
 
+renderIssue : Issue -> Accordion.State -> Html Msg
+renderIssue issue accordionState =
+    Accordion.config AccordionMsg
+        |> Accordion.withAnimation
+        |> Accordion.cards (List.map renderSection issue.sections)
+        |> Accordion.view accordionState
+
+
+renderSection : Section -> Accordion.Card Msg
 renderSection section =
-    ul [] [ li [] [ text section.name ] ]
+    Accordion.card
+        { id = section.name
+        , options = []
+        , header =
+            Accordion.header [] <|
+                Accordion.toggle []
+                    [ text
+                        (section.name
+                            ++ "("
+                            ++ toString (List.length section.posts)
+                            ++ ")"
+                        )
+                    ]
+        , blocks =
+            [ Accordion.block [] (List.map renderPost section.posts) ]
+        }
+
+
+renderPost :
+    Post
+    -> Block.Item msg -- TODO what is `msg`?
+renderPost post =
+    Block.custom
+        (Card.config [ Card.attrs [ attribute "draggable" "true" ] ]
+            |> Card.block []
+                [ Block.text [] [ text post.title ] ]
+            |> Card.view
+        )
 
 
 
@@ -78,14 +131,17 @@ renderSection section =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.none
+    Accordion.subscriptions model.accordionState AccordionMsg
+
 
 
 -- HTTP
 
+
 getIssue : Int -> Cmd Msg
 getIssue id =
     let
-        url = "http://bulletin.aashe.org/api/issue/" ++ toString id ++ "/"
+        url =
+            "http://bulletin.aashe.org/api/issue/" ++ toString id ++ "/"
     in
-        Http.send NewIssue (Http.get url decodeIssue)
+        Http.send LoadIssue (Http.get url decodeIssue)
