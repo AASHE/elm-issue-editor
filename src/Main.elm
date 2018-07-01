@@ -1,13 +1,14 @@
 module Main exposing (main)
 
+import Bootstrap.Accordion as Accordion
+import Bootstrap.CDN as CDN
+import Bootstrap.Card as Card
+import Bootstrap.Card.Block as Block
+import Bootstrap.Grid as Grid
+import DragAndDropEvents exposing (onDragStart, onDragOver, onDragEnd, onDrop)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Http exposing (..)
-import Bootstrap.Accordion as Accordion
-import Bootstrap.Card as Card
-import Bootstrap.Card.Block as Block
-import Bootstrap.CDN as CDN
-import Bootstrap.Grid as Grid
 import Issue exposing (Issue, decodeIssue, emptyIssue)
 import Post exposing (Post)
 import Section exposing (Section)
@@ -31,14 +32,26 @@ type alias Model =
     { issue : Issue
     , status : String
     , accordionState : Accordion.State
+    , movingPost : Maybe Post
+    , movingPostPosition : Int
+    , draggedOverPost : Maybe Post
+    , droppedOnPost : Maybe Post
+    , sectionsToSave : List Section
+    , showSaveButton : Bool
     }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( { issue = emptyIssue -- TODO - smells
+    ( { issue = emptyIssue -- <-- smells to me
       , status = ""
       , accordionState = Accordion.initialState
+      , movingPost = Nothing
+      , movingPostPosition = -1
+      , draggedOverPost = Nothing
+      , droppedOnPost = Nothing
+      , sectionsToSave = []
+      , showSaveButton = False
       }
     , (getIssue 515)
     )
@@ -51,6 +64,10 @@ init =
 type Msg
     = LoadIssue (Result Http.Error Issue)
     | AccordionMsg Accordion.State
+    | DragStart Post
+    | DragEnd
+    | DropOn Post
+    | DragOver Post
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -67,6 +84,46 @@ update msg model =
             , Cmd.none
             )
 
+        DragStart post ->
+            ( { model
+                | movingPost = Just post
+                , movingPostPosition = post.position
+              }
+            , Cmd.none
+            )
+
+        DragEnd ->
+            let
+                movingPost =
+                    Just model.movingPost
+            in
+                ( { model | movingPost = Nothing }
+                , Cmd.none
+                )
+
+        DropOn post ->
+            let
+                section =
+                    List.filter
+                        (\s -> List.member post s.posts)
+                        model.issue.sections
+                        |> List.head
+                        |> Maybe.andThen (\s -> Just(s))
+            in
+                ( { model
+                    | droppedOnPost =
+                        Just post
+                    , sectionsToSave =
+                        List.append model.sectionsToSave [ section ]
+                  }
+                , Cmd.none
+                )
+
+        DragOver post ->
+            ( { model | draggedOverPost = Just post }
+            , Cmd.none
+            )
+
 
 
 -- View
@@ -79,50 +136,128 @@ view model =
         , Grid.row []
             [ Grid.col []
                 [ text model.status
-                , renderIssue model.issue model.accordionState
+                , viewIssue model
                 ]
             ]
         ]
 
 
-renderIssue : Issue -> Accordion.State -> Html Msg
-renderIssue issue accordionState =
+viewIssue : Model -> Html Msg
+viewIssue model =
     Accordion.config AccordionMsg
         |> Accordion.withAnimation
-        |> Accordion.cards (List.map renderSection issue.sections)
-        |> Accordion.view accordionState
+        |> Accordion.cards (viewSections model)
+        |> Accordion.view model.accordionState
 
 
-renderSection : Section -> Accordion.Card Msg
-renderSection section =
-    Accordion.card
-        { id = section.name
-        , options = []
-        , header =
-            Accordion.header [] <|
-                Accordion.toggle []
-                    [ text
-                        (section.name
-                            ++ "("
-                            ++ toString (List.length section.posts)
-                            ++ ")"
-                        )
+viewSections : Model -> List (Accordion.Card Msg)
+viewSections model =
+    let
+        viewThisModelsSection =
+            viewSection model
+    in
+        List.map viewThisModelsSection model.issue.sections
+
+
+viewSection : Model -> Section -> Accordion.Card Msg
+viewSection model section =
+    let
+        showSaveButton =
+            List.member section model.sectionsToSave
+    in
+        Accordion.card
+            { id = section.name
+            , options = []
+            , header =
+                Accordion.header [] <|
+                    Accordion.toggle []
+                        [ text
+                            (section.name
+                                ++ "("
+                                ++ toString (List.length section.posts)
+                                ++ ")"
+                            )
+                        , if showSaveButton then
+                            button [] [ text "Save" ]
+                          else
+                            text ""
+                        ]
+            , blocks =
+                [ Accordion.block [] (viewPosts model section) ]
+            }
+
+
+viewPosts : Model -> Section -> List (Block.Item Msg)
+viewPosts model section =
+    let
+        viewThisSectionsPosts =
+            viewPost model
+
+        sortedPosts =
+            List.sortBy .position section.posts
+    in
+        List.map viewThisSectionsPosts sortedPosts
+
+
+viewPost :
+    Model
+    -> Post
+    -> Block.Item Msg
+viewPost model post =
+    let
+        isDroppable =
+            model.movingPost /= Nothing
+
+        isDragOverPost =
+            model.draggedOverPost == Just post
+
+        isMovingPost =
+            model.movingPost == Just post
+
+        baseTitle =
+            post.title
+
+        droppableTitle =
+            if isDroppable then
+                baseTitle ++ " droppable"
+            else
+                baseTitle
+
+        draggableTitle =
+            if isDragOverPost then
+                droppableTitle ++ " dragover"
+            else
+                droppableTitle
+
+        movingTitle =
+            if isMovingPost then
+                draggableTitle ++ " moving"
+            else
+                draggableTitle
+
+        isDroppedOnPost =
+            model.droppedOnPost == Just post
+
+        title =
+            if isDroppedOnPost then
+                movingTitle ++ " dropped on"
+            else
+                movingTitle
+    in
+        Block.custom
+            (Card.config
+                [ Card.attrs
+                    [ attribute "draggable" "true"
+                    , onDragOver <| DragOver post
+                    , onDragStart <| DragStart post
+                    , onDragEnd <| DragEnd
+                    , onDrop <| DropOn post
                     ]
-        , blocks =
-            [ Accordion.block [] (List.map renderPost section.posts) ]
-        }
-
-
-renderPost :
-    Post
-    -> Block.Item msg -- TODO what is `msg`?
-renderPost post =
-    Block.custom
-        (Card.config [ Card.attrs [ attribute "draggable" "true" ] ]
-            |> Card.block []
-                [ Block.text [] [ text post.title ] ]
-            |> Card.view
-        )
+                ]
+                |> Card.block []
+                    [ Block.text [] [ text title ] ]
+                |> Card.view
+            )
 
 
 
