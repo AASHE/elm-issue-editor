@@ -8,6 +8,7 @@ import Bootstrap.Grid as Grid
 import DragAndDropEvents exposing (onDragStart, onDragOver, onDragEnd, onDrop)
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Html.Events exposing (onClick)
 import Http exposing (..)
 import Issue exposing (Issue, decodeIssue, emptyIssue)
 import Post exposing (Post)
@@ -68,6 +69,7 @@ type Msg
     | DragEnd
     | DropOn Post
     | DragOver Post
+    | SaveSectionOrder Section
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -103,12 +105,22 @@ update msg model =
 
         DropOn post ->
             let
-                section =
+                sections =
                     List.filter
                         (\s -> List.member post s.posts)
                         model.issue.sections
-                        |> List.head
-                        |> Maybe.andThen (\s -> Just(s))
+
+                section =
+                    case (List.head sections) of
+                        Nothing ->
+                            { id = 0
+                            , name = "Impossible Case"
+                            , position = 0
+                            , posts = []
+                            }
+
+                        Just section ->
+                            section
             in
                 ( { model
                     | droppedOnPost =
@@ -121,6 +133,16 @@ update msg model =
 
         DragOver post ->
             ( { model | draggedOverPost = Just post }
+            , Cmd.none
+            )
+
+        SaveSectionOrder section ->
+            ( { model
+                | sectionsToSave =
+                    List.filter
+                        (\s -> s /= section)
+                        model.sectionsToSave
+              }
             , Cmd.none
             )
 
@@ -178,7 +200,9 @@ viewSection model section =
                                 ++ ")"
                             )
                         , if showSaveButton then
-                            button [] [ text "Save" ]
+                            button
+                                [ onClick (SaveSectionOrder section) ]
+                                [ text "Save" ]
                           else
                             text ""
                         ]
