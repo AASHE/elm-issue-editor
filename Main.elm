@@ -5,6 +5,7 @@ import Bootstrap.CDN as CDN
 import Bootstrap.Card as Card
 import Bootstrap.Card.Block as Block
 import Bootstrap.Grid as Grid
+import Debug exposing (crash, log)
 import DragAndDropEvents exposing (onDragStart, onDragOver, onDragEnd, onDrop)
 import Html exposing (..)
 import Html.Attributes exposing (..)
@@ -32,9 +33,9 @@ main =
 type alias Model =
     { issue : Issue
     , status : String
+    , section : Maybe Section
     , accordionState : Accordion.State
     , movingPost : Maybe Post
-    , movingPostPosition : Int
     , draggedOverPost : Maybe Post
     , droppedOnPost : Maybe Post
     , sectionsToSave : List Section
@@ -45,10 +46,10 @@ type alias Model =
 init : ( Model, Cmd Msg )
 init =
     ( { issue = emptyIssue -- <-- smells to me
+      , section = Nothing
       , status = ""
       , accordionState = Accordion.initialState
       , movingPost = Nothing
-      , movingPostPosition = -1
       , draggedOverPost = Nothing
       , droppedOnPost = Nothing
       , sectionsToSave = []
@@ -72,6 +73,57 @@ type Msg
     | SaveSectionOrder Section
 
 
+getSectionForPost : Model -> Post -> Section
+getSectionForPost model post =
+    let
+        sections =
+            List.filter (\s -> List.member post s.posts)
+                model.issue.sections
+    in
+        case List.head sections of
+            Nothing ->
+                Debug.crash "getSectionForPost: no section for post"
+
+            Just section ->
+                section
+
+
+removePostFromSection : Section -> Post -> Section
+removePostFromSection section post =
+    let
+        remainingPosts =
+            List.filter (\p -> p /= post) section.posts
+
+        postsSlidUp =
+            slidePostsUp remainingPosts post
+
+        _ =
+            Debug.log "remainingPosts" remainingPosts
+    in
+        { section | posts = postsSlidUp }
+
+
+slidePostsUp : List Post -> Post -> List Post
+slidePostsUp posts post =
+    List.map
+        (\p ->
+            if p.position >= post.position then
+                { p | position = p.position - 1 }
+            else
+                p
+        )
+        posts
+
+
+removePostFromIssue : Model -> Issue -> Post -> Issue
+removePostFromIssue model issue post =
+    let
+        sections =
+            List.map (\s -> removePostFromSection s post) issue.sections
+    in
+        { issue | sections = sections }
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
@@ -87,46 +139,60 @@ update msg model =
             )
 
         DragStart post ->
+            let
+                issue =
+                    removePostFromIssue model model.issue post
+
+                section =
+                    getSectionForPost model post
+            in
+                ( { model
+                    | movingPost = Just post
+                    , issue = issue
+                    , section = Just section
+                  }
+                , Cmd.none
+                )
+
+        DragEnd ->
             ( { model
-                | movingPost = Just post
-                , movingPostPosition = post.position
+                | movingPost = Nothing
+                , section = Nothing
               }
             , Cmd.none
             )
 
-        DragEnd ->
-            let
-                movingPost =
-                    Just model.movingPost
-            in
-                ( { model | movingPost = Nothing }
-                , Cmd.none
-                )
-
         DropOn post ->
             let
-                sections =
-                    List.filter
-                        (\s -> List.member post s.posts)
-                        model.issue.sections
+                movingPost =
+                    case model.movingPost of
+                        Nothing ->
+                            Debug.crash "No model.movingPost"
+
+                        Just movingPost ->
+                            movingPost
+
+                _ = Debug.log "section.posts before"
+                    (List.map (\p -> p.title ++ ": " ++
+                               toString p.position) section.posts)
 
                 section =
-                    case (List.head sections) of
+                    case model.section of
                         Nothing ->
-                            { id = 0
-                            , name = "Impossible Case"
-                            , position = 0
-                            , posts = []
-                            }
+                            Debug.crash "No sectino to drop post on"
 
                         Just section ->
-                            section
+                            insertPostInSection section movingPost post
+
+                sectionsToSave =
+                    if List.member section model.sectionsToSave then
+                        model.sectionsToSave
+                    else
+                        List.append model.sectionsToSave [ section ]
             in
                 ( { model
-                    | droppedOnPost =
-                        Just post
-                    , sectionsToSave =
-                        List.append model.sectionsToSave [ section ]
+                    | droppedOnPost = Just post
+                    , sectionsToSave = sectionsToSave
                   }
                 , Cmd.none
                 )
@@ -137,6 +203,8 @@ update msg model =
             )
 
         SaveSectionOrder section ->
+            -- Eventually make call to server to save order.
+            -- For now, just remove section from model.sectionsToSave.
             ( { model
                 | sectionsToSave =
                     List.filter
@@ -145,6 +213,66 @@ update msg model =
               }
             , Cmd.none
             )
+
+
+slidePostsDown : List Post -> List Post
+slidePostsDown posts =
+    List.map (\p -> { p | position = p.position + 1 }) posts
+
+
+dummyPost : Post
+dummyPost =
+    { id = -1
+    , title = "dummy post"
+    , url = ""
+    , approved = False
+    , pubDate = ""
+    , submitter = -1
+    , position = -1
+    , links = []
+    }
+
+
+getPostForMaybePost : Maybe Post -> Post
+getPostForMaybePost maybe =
+    case maybe of
+        Nothing ->
+            -- this can't be correct
+            dummyPost
+
+        Just maybe ->
+            maybe
+
+
+insertPostInSection : Section -> Post -> Post -> Section
+insertPostInSection section insertThis beforeThis =
+    let
+        head =
+            List.take (beforeThis.position - 1) section.posts
+
+        tail =
+            List.drop beforeThis.position section.posts
+
+        downslidTail =
+            slidePostsDown tail
+
+        insertThisPositionedPost =
+            { insertThis | position = beforeThis.position }
+
+        posts =
+            head ++ [ insertThisPositionedPost ] ++ downslidTail
+
+        _ =
+            List.map
+                (\p ->
+                    Debug.log "post"
+                        (p.title ++ ": " ++ toString p.position)
+                )
+                posts
+    in
+        { section
+            | posts = posts
+        }
 
 
 
@@ -228,60 +356,20 @@ viewPost :
     -> Post
     -> Block.Item Msg
 viewPost model post =
-    let
-        isDroppable =
-            model.movingPost /= Nothing
-
-        isDragOverPost =
-            model.draggedOverPost == Just post
-
-        isMovingPost =
-            model.movingPost == Just post
-
-        baseTitle =
-            post.title
-
-        droppableTitle =
-            if isDroppable then
-                baseTitle ++ " droppable"
-            else
-                baseTitle
-
-        draggableTitle =
-            if isDragOverPost then
-                droppableTitle ++ " dragover"
-            else
-                droppableTitle
-
-        movingTitle =
-            if isMovingPost then
-                draggableTitle ++ " moving"
-            else
-                draggableTitle
-
-        isDroppedOnPost =
-            model.droppedOnPost == Just post
-
-        title =
-            if isDroppedOnPost then
-                movingTitle ++ " dropped on"
-            else
-                movingTitle
-    in
-        Block.custom
-            (Card.config
-                [ Card.attrs
-                    [ attribute "draggable" "true"
-                    , onDragOver <| DragOver post
-                    , onDragStart <| DragStart post
-                    , onDragEnd <| DragEnd
-                    , onDrop <| DropOn post
-                    ]
+    Block.custom
+        (Card.config
+            [ Card.attrs
+                [ attribute "draggable" "true"
+                , onDragOver <| DragOver post
+                , onDragStart <| DragStart post
+                , onDragEnd <| DragEnd
+                , onDrop <| DropOn post
                 ]
-                |> Card.block []
-                    [ Block.text [] [ text title ] ]
-                |> Card.view
-            )
+            ]
+            |> Card.block []
+                [ Block.text [] [ text post.title ] ]
+            |> Card.view
+        )
 
 
 
