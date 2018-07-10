@@ -33,7 +33,6 @@ main =
 type alias Model =
     { issue : Issue
     , status : String
-    , section : Maybe Section
     , accordionState : Accordion.State
     , movingPost : Maybe Post
     , draggedOverPost : Maybe Post
@@ -46,7 +45,6 @@ type alias Model =
 init : ( Model, Cmd Msg )
 init =
     ( { issue = emptyIssue -- <-- smells to me
-      , section = Nothing
       , status = ""
       , accordionState = Accordion.initialState
       , movingPost = Nothing
@@ -124,6 +122,18 @@ removePostFromIssue model issue post =
         { issue | sections = sections }
 
 
+insertPostInIssue : Issue -> Section -> Post -> Post -> Issue
+insertPostInIssue issue section insertThis insertBefore =
+    let
+        otherSections = List.filter (\s -> section /= s) issue.sections
+        targetSection = List.filter (\s -> section == s) issue.sections
+                      |> List.head
+        sections = otherSections ++
+                   [insertPostInSection section insertThis insertBefore]
+    in
+        { issue | sections = sections }
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
@@ -142,14 +152,10 @@ update msg model =
             let
                 issue =
                     removePostFromIssue model model.issue post
-
-                section =
-                    getSectionForPost model post
             in
                 ( { model
                     | movingPost = Just post
                     , issue = issue
-                    , section = Just section
                   }
                 , Cmd.none
                 )
@@ -157,7 +163,6 @@ update msg model =
         DragEnd ->
             ( { model
                 | movingPost = Nothing
-                , section = Nothing
               }
             , Cmd.none
             )
@@ -172,17 +177,11 @@ update msg model =
                         Just movingPost ->
                             movingPost
 
-                _ = Debug.log "section.posts before"
-                    (List.map (\p -> p.title ++ ": " ++
-                               toString p.position) section.posts)
-
                 section =
-                    case model.section of
-                        Nothing ->
-                            Debug.crash "No sectino to drop post on"
+                    getSectionForPost model post
 
-                        Just section ->
-                            insertPostInSection section movingPost post
+                issue =
+                    insertPostInIssue model.issue section movingPost post
 
                 sectionsToSave =
                     if List.member section model.sectionsToSave then
@@ -191,7 +190,8 @@ update msg model =
                         List.append model.sectionsToSave [ section ]
             in
                 ( { model
-                    | droppedOnPost = Just post
+                    | issue = issue
+                    , droppedOnPost = Just post
                     , sectionsToSave = sectionsToSave
                   }
                 , Cmd.none
@@ -253,22 +253,17 @@ insertPostInSection section insertThis beforeThis =
         tail =
             List.drop beforeThis.position section.posts
 
-        downslidTail =
-            slidePostsDown tail
+        -- downslidTail =
+        --     slidePostsDown tail
+
+        _ = Debug.log "section.posts: " section.posts
+
 
         insertThisPositionedPost =
             { insertThis | position = beforeThis.position }
 
         posts =
-            head ++ [ insertThisPositionedPost ] ++ downslidTail
-
-        _ =
-            List.map
-                (\p ->
-                    Debug.log "post"
-                        (p.title ++ ": " ++ toString p.position)
-                )
-                posts
+            head ++ [ insertThisPositionedPost ] ++ tail
     in
         { section
             | posts = posts
