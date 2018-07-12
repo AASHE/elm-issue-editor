@@ -153,14 +153,17 @@ insertMovingItem model overThis =
         head =
             List.take (overThis.position - 1) model.items
 
-        headless =
-            List.filter (\p -> p /= actualMovingItem) head
-
         tail =
             List.drop (overThis.position - 1) model.items
 
+        isNotActualMovingItem item =
+            item /= actualMovingItem
+
+        headless =
+            List.filter isNotActualMovingItem head
+
         tailless =
-            List.filter (\p -> p /= actualMovingItem) tail
+            List.filter isNotActualMovingItem tail
     in
         { model
             | items = headless ++ [ actualMovingItem ] ++ tailless
