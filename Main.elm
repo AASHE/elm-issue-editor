@@ -20,39 +20,39 @@ main =
 -- Model
 
 
-type alias Post =
+type alias Item =
     { title : String
     , position : Int
     }
 
 
 type alias Model =
-    { posts : List Post
-    , movingPost : Maybe Post
-    , draggedOverPost : Maybe Post
-    , droppedOnPost : Maybe Post
+    { items : List Item
+    , movingItem : Maybe Item
+    , draggedOverItem : Maybe Item
+    , droppedOnItem : Maybe Item
     }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( { posts =
-            [ { title = "Post One"
+    ( { items =
+            [ { title = "Item One"
               , position = 1
               }
-            , { title = "Post Two"
+            , { title = "Item Two"
               , position = 2
               }
-            , { title = "Post Three"
+            , { title = "Item Three"
               , position = 3
               }
-            , { title = "Post Four"
+            , { title = "Item Four"
               , position = 4
               }
             ]
-      , movingPost = Nothing
-      , draggedOverPost = Nothing
-      , droppedOnPost = Nothing
+      , movingItem = Nothing
+      , draggedOverItem = Nothing
+      , droppedOnItem = Nothing
       }
     , Cmd.none
     )
@@ -63,101 +63,107 @@ init =
 
 
 type Msg
-    = DragStart Post
+    = DragStart Item
     | DragEnd
-    | DropOn Post
-    | DragOver Post
+    | DropOn Item
+    | DragOver Item
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        DragStart post ->
+        DragStart item ->
             ( { model
-                | movingPost = Just post
+                | movingItem = Just item
               }
             , Cmd.none
             )
 
         DragEnd ->
             ( { model
-                | movingPost = Nothing
+                | movingItem = Nothing
               }
             , Cmd.none
             )
 
-        DropOn post ->
+        DropOn item ->
             let
                 droppedOnModel =
-                    moveMovingPost model post
+                    moveMovingItem model item
             in
                 ( { droppedOnModel
-                    | droppedOnPost = Just post
+                    | droppedOnItem = Just item
                   }
                 , Cmd.none
                 )
 
-        DragOver post ->
-            ( { model | draggedOverPost = Just post }
+        DragOver item ->
+            ( { model | draggedOverItem = Just item }
             , Cmd.none
             )
 
 
-moveMovingPost : Model -> Post -> Model
-moveMovingPost model beforeThis =
-    repositionPosts
-        (insertMovingPost (removeMovingPost model) beforeThis)
+moveMovingItem : Model -> Item -> Model
+moveMovingItem model overThis =
+    repositionItems
+        (insertMovingItem (removeMovingItem model) overThis)
 
 
-repositionPosts : Model -> Model
-repositionPosts model =
+repositionItems : Model -> Model
+repositionItems model =
     let
-        renumber idx post =
-            { post | position = idx }
+        renumber idx item =
+            { item | position = idx + 1 }
     in
         { model
-            | posts = List.indexedMap renumber model.posts
+            | items = List.indexedMap renumber model.items
         }
 
 
-removeMovingPost : Model -> Model
-removeMovingPost model =
+removeMovingItem : Model -> Model
+removeMovingItem model =
     let
         removeThis =
-            case model.movingPost of
+            case model.movingItem of
                 Nothing ->
                     Debug.crash ("stupid")
 
-                Just movingPost ->
-                    movingPost
+                Just movingItem ->
+                    movingItem
     in
         { model
-            | posts = List.filter (\p -> p /= removeThis) model.posts
+            | items = List.filter (\p -> p /= removeThis) model.items
         }
 
 
-insertMovingPost : Model -> Post -> Model
-insertMovingPost model beforeThis =
+insertMovingItem : Model -> Item -> Model
+insertMovingItem model overThis =
     let
+        movingItem =
+            model.movingItem
+
+        actualMovingItem =
+            case movingItem of
+                Nothing ->
+                    Debug.crash "what a joke"
+
+                Just movingItem ->
+                    movingItem
+
         head =
-            List.take (beforeThis.position - 1) model.posts
+            List.take (overThis.position - 1) model.items
+
+        headless =
+            List.filter (\p -> p /= actualMovingItem) head
 
         tail =
-            List.drop (beforeThis.position - 1) model.posts
+            List.drop (overThis.position - 1) model.items
 
-        movingPost =
-            model.movingPost
-
-        insertThis =
-            case model.movingPost of
-                Nothing ->
-                    Debug.crash ("stupid")
-
-                Just movingPost ->
-                    movingPost
+        tailless =
+            List.filter (\p -> p /= actualMovingItem) tail
     in
         { model
-            | posts = head ++ [ insertThis ] ++ tail
+            | items = headless ++ [ actualMovingItem ] ++ tailless
         }
 
 
@@ -167,30 +173,34 @@ insertMovingPost model beforeThis =
 
 view : Model -> Html Msg
 view model =
-    div [] (viewPosts model)
+    div [] (viewItems model)
 
 
-viewPosts : Model -> List (Html Msg)
-viewPosts model =
+viewItems : Model -> List (Html Msg)
+viewItems model =
     let
-        sortedPosts =
-            List.sortBy .position model.posts
+        sortedItems =
+            List.sortBy .position model.items
     in
-        List.map viewPost sortedPosts
+        List.map (\i -> viewItem model i) sortedItems
 
 
-viewPost : Post -> Html Msg
-viewPost post =
-    div
-        [ attribute "draggable" "true"
-        , onDragOver <| DragOver post
-        , onDragStart <| DragStart post
-        , onDragEnd <| DragEnd
-        , onDrop <| DropOn post
-        ]
-        [ h3 []
-            [ text (toString post.position)
-            , text ".)  "
-            , text post.title
+viewItem : Model -> Item -> Html Msg
+viewItem model item =
+    let
+        label =
+            (toString item.position)
+                ++ ".) "
+                ++ item.title
+    in
+        div
+            [ attribute "draggable" "true"
+            , onDragOver <| DragOver item
+            , onDragStart <| DragStart item
+            , onDragEnd <| DragEnd
+            , onDrop <| DropOn item
             ]
-        ]
+            [ h3 []
+                [ text label
+                ]
+            ]
