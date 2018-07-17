@@ -11,6 +11,7 @@ type alias Post =
     { id : Int
     , title : String
     , url : String
+    , blurb : String
     , approved : Bool
     , pubDate : String
     , submitter : Int
@@ -24,6 +25,7 @@ decodePost =
         |> Json.Decode.Pipeline.required "id" (Json.Decode.int)
         |> Json.Decode.Pipeline.required "title" (Json.Decode.string)
         |> Json.Decode.Pipeline.required "url" (Json.Decode.string)
+        |> Json.Decode.Pipeline.required "blurb" (Json.Decode.string)
         |> Json.Decode.Pipeline.required "approved" (Json.Decode.bool)
         |> Json.Decode.Pipeline.required "pub_date" (Json.Decode.string)
         |> Json.Decode.Pipeline.required "submitter" (Json.Decode.int)
@@ -36,6 +38,7 @@ encodePost record =
         [ ("id",  Json.Encode.int <| record.id)
         , ("title",  Json.Encode.string <| record.title)
         , ("url",  Json.Encode.string <| record.url)
+        , ("blurb",  Json.Encode.string <| record.blurb)
         , ("approved",  Json.Encode.bool <| record.approved)
         , ("pubDate",  Json.Encode.string <| record.pubDate)
         , ("submitter",  Json.Encode.int <| record.submitter)
