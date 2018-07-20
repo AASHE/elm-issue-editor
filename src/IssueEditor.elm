@@ -8,6 +8,7 @@ import Bootstrap.Grid as Grid
 import Debug exposing (log)
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Http exposing (..)
 import DragAndDropEvents exposing (onDragStart, onDragOver, onDragEnd, onDrop)
 import Issue exposing (..)
 import Post exposing (..)
@@ -35,131 +36,22 @@ type alias Model =
     , draggedOverPost : Maybe Post.Model
     , droppedOnPost : Maybe Post.Model
     , accordionState : Accordion.State
+    , loadingError : String
     }
 
 
-dummyPosts : List Post.Model
-dummyPosts =
-    [ { approved = True
-      , id = 1
-      , links = []
-      , pubDate = ""
-      , submitter = 1
-      , url = "http://site.tld"
-      , title = "Post One"
-      , position = 1
-      , blurb = "1 comes first"
-      }
-    , { approved = True
-      , id = 2
-      , links = []
-      , pubDate = ""
-      , submitter = 2
-      , url = "http://site.tld"
-      , title = "Post Two"
-      , position = 2
-      , blurb = "2 is goofy"
-      }
-    , { approved = True
-      , id = 3
-      , links = []
-      , pubDate = ""
-      , submitter = 3
-      , url = "http://site.tld"
-      , title = "Post Three"
-      , position = 3
-      , blurb = "3 is pretty good"
-      }
-    , { approved = True
-      , id = 4
-      , links = []
-      , pubDate = ""
-      , submitter = 4
-      , url = "http://site.tld"
-      , title = "Post Four"
-      , position = 4
-      , blurb = "Four is the best"
-      }
-    ]
-
-
-moreDummyPosts : List Post.Model
-moreDummyPosts =
-    [ { approved = True
-      , id = 10
-      , links = []
-      , pubDate = ""
-      , submitter = 1
-      , url = "http://site.tld"
-      , title = "Post OneXXX"
-      , position = 1
-      , blurb = "1 comes first"
-      }
-    , { approved = True
-      , id = 20
-      , links = []
-      , pubDate = ""
-      , submitter = 2
-      , url = "http://site.tld"
-      , title = "Post TwoXXX"
-      , position = 2
-      , blurb = "2 is goofy"
-      }
-    , { approved = True
-      , id = 30
-      , links = []
-      , pubDate = ""
-      , submitter = 3
-      , url = "http://site.tld"
-      , title = "Post ThreeXXX"
-      , position = 3
-      , blurb = "3 is pretty good"
-      }
-    , { approved = True
-      , id = 40
-      , links = []
-      , pubDate = ""
-      , submitter = 4
-      , url = "http://site.tld"
-      , title = "Post FourXXX"
-      , position = 4
-      , blurb = "Four is the best"
-      }
-    ]
-
-
-init : ( Model, Cmd msg )
+init : ( Model, Cmd Msg )
 init =
-    let
-        dummyIssue =
-            Issue.dummyIssue
-
-        section =
-            { id = 1
-            , name = "First Section"
-            , posts = dummyPosts
-            , position = 1
-            }
-
-        secondSection =
-            { id = 2
-            , name = "Second Section"
-            , posts = moreDummyPosts
-            , position = 2
-            }
-    in
-        ( { issue =
-                { dummyIssue
-                    | sections = [ section, secondSection ]
-                }
-          , currentSection = Just section
-          , movingPost = Nothing
-          , draggedOverPost = Nothing
-          , droppedOnPost = Nothing
-          , accordionState = Accordion.initialState
-          }
-        , Cmd.none
-        )
+    ( { issue = Issue.dummyIssue -- <-- smells to me
+      , loadingError = ""
+      , accordionState = Accordion.initialState
+      , movingPost = Nothing
+      , draggedOverPost = Nothing
+      , droppedOnPost = Nothing
+      , currentSection = Nothing
+      }
+    , (getIssue 515)
+    )
 
 
 
@@ -172,6 +64,7 @@ type Msg
     | DropOn Post.Model
     | DragOver Post.Model
     | AccordionMsg Accordion.State
+    | LoadIssue (Result Http.Error Issue.Model)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -215,6 +108,12 @@ update msg model =
               }
             , Cmd.none
             )
+
+        LoadIssue (Ok issue) ->
+            ( { model | issue = issue }, Cmd.none )
+
+        LoadIssue (Err msg) ->
+            ( { model | loadingError = toString msg }, Cmd.none )
 
         AccordionMsg state ->
             ( { model | accordionState = state }
@@ -471,3 +370,16 @@ postView post =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     Accordion.subscriptions model.accordionState AccordionMsg
+
+
+
+-- HTTP
+
+
+getIssue : Int -> Cmd Msg
+getIssue id =
+    let
+        url =
+            "http://bulletin.aashe.org/api/issue/" ++ toString id ++ "/"
+    in
+        Http.send LoadIssue (Http.get url decodeIssue)
