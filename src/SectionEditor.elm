@@ -10,7 +10,7 @@ import DragAndDropEvents exposing (onDragStart, onDragOver, onDragEnd, onDrop)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Post exposing (Post)
-import Section exposing (Section)
+import Section exposing (..)
 
 
 main : Program Never Model Msg
@@ -28,7 +28,7 @@ main =
 
 
 type alias Model =
-    { section : Section
+    { section : Section.Model
     , movingPost : Maybe Post
     , draggedOverPost : Maybe Post
     , droppedOnPost : Maybe Post
@@ -154,22 +154,7 @@ update msg model =
 
 moveMovingPost : Model -> Post -> Model
 moveMovingPost model overThis =
-    -- why doesn't this piping shit work?
-    --
-    -- removeMovingPost model
-    --     |> insertMovingPost overThis
-    --     |> renumberPosts
-    let
-        x =
-            removeMovingPost model
-
-        y =
-            insertMovingPost x overThis
-
-        z =
-            renumberPosts y
-    in
-        z
+    renumberPosts (insertMovingPost (removeMovingPost model) overThis)
 
 
 renumberPosts : Model -> Model
@@ -218,11 +203,8 @@ removeMovingPost model =
 insertMovingPost : Model -> Post -> Model
 insertMovingPost model overThis =
     let
-        movingPost =
-            model.movingPost
-
         actualMovingPost =
-            case movingPost of
+            case model.movingPost of
                 Nothing ->
                     Debug.crash "what a joke"
 
@@ -255,6 +237,8 @@ insertMovingPost model overThis =
         { model
             | section = newSection
         }
+
+
 
 
 

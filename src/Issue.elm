@@ -3,13 +3,13 @@ module Issue exposing (..)
 import Json.Encode
 import Json.Decode
 import Json.Decode.Pipeline
-import Section exposing (Section, decodeSection, encodeSection)
+import Section exposing (..)
 
 
-type alias Issue =
+type alias Model =
     { id : Int
     , pubDate : String
-    , sections : List Section
+    , sections : List Section.Model
     , name : String
     , subject : String
     , fromName : String
@@ -29,8 +29,8 @@ type alias Issue =
     }
 
 
-emptyIssue : Issue
-emptyIssue =
+dummyIssue : Model
+dummyIssue =
     { id = 0
     , pubDate = ""
     , sections = []
@@ -53,9 +53,9 @@ emptyIssue =
     }
 
 
-decodeIssue : Json.Decode.Decoder Issue
+decodeIssue : Json.Decode.Decoder Model
 decodeIssue =
-    Json.Decode.Pipeline.decode Issue
+    Json.Decode.Pipeline.decode Model
         |> Json.Decode.Pipeline.required "id" (Json.Decode.int)
         |> Json.Decode.Pipeline.required "pub_date" (Json.Decode.string)
         |> Json.Decode.Pipeline.required "sections" (Json.Decode.list decodeSection)
@@ -77,7 +77,7 @@ decodeIssue =
         |> Json.Decode.Pipeline.required "text_template_name" (Json.Decode.string)
 
 
-encodeIssue : Issue -> Json.Encode.Value
+encodeIssue : Model -> Json.Encode.Value
 encodeIssue record =
     Json.Encode.object
         [ ( "id", Json.Encode.int <| record.id )
