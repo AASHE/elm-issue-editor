@@ -9,8 +9,8 @@ import Debug exposing (crash, log)
 import DragAndDropEvents exposing (onDragStart, onDragOver, onDragEnd, onDrop)
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Post exposing (Post)
-import Section exposing (..)
+import Post exposing (Model)
+import Section exposing (Model)
 
 
 main : Program Never Model Msg
@@ -29,14 +29,14 @@ main =
 
 type alias Model =
     { section : Section.Model
-    , movingPost : Maybe Post
-    , draggedOverPost : Maybe Post
-    , droppedOnPost : Maybe Post
+    , movingPost : Maybe Post.Model
+    , draggedOverPost : Maybe Post.Model
+    , droppedOnPost : Maybe Post.Model
     , accordionState : Accordion.State
     }
 
 
-posts : List Post
+posts : List Post.Model
 posts =
     [ { approved = True
       , id = 1
@@ -46,7 +46,6 @@ posts =
       , url = "http://site.tld"
       , title = "Post One"
       , position = 1
-      , blurb = "1 comes first"
       }
     , { approved = True
       , id = 2
@@ -56,7 +55,6 @@ posts =
       , url = "http://site.tld"
       , title = "Post Two"
       , position = 2
-      , blurb = "2 is goofy"
       }
     , { approved = True
       , id = 3
@@ -66,7 +64,6 @@ posts =
       , url = "http://site.tld"
       , title = "Post Three"
       , position = 3
-      , blurb = "3 is pretty good"
       }
     , { approved = True
       , id = 4
@@ -76,7 +73,6 @@ posts =
       , url = "http://site.tld"
       , title = "Post Four"
       , position = 4
-      , blurb = "Four is the best"
       }
     ]
 
@@ -103,10 +99,10 @@ init =
 
 
 type Msg
-    = DragStart Post
+    = DragStart Post.Model
     | DragEnd
-    | DropOn Post
-    | DragOver Post
+    | DropOn Post.Model
+    | DragOver Post.Model
     | AccordionMsg Accordion.State
 
 
@@ -152,7 +148,7 @@ update msg model =
             )
 
 
-moveMovingPost : Model -> Post -> Model
+moveMovingPost : Model -> Post.Model -> Model
 moveMovingPost model overThis =
     renumberPosts (insertMovingPost (removeMovingPost model) overThis)
 
@@ -200,7 +196,7 @@ removeMovingPost model =
         }
 
 
-insertMovingPost : Model -> Post -> Model
+insertMovingPost : Model -> Post.Model -> Model
 insertMovingPost model overThis =
     let
         actualMovingPost =
@@ -288,7 +284,7 @@ postsView model =
         List.map (\p -> postView p) sortedPosts
 
 
-postView : Post -> Block.Item Msg
+postView : Post.Model -> Block.Item Msg
 postView post =
     Block.custom
         (Card.config

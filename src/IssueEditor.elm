@@ -35,6 +35,9 @@ type alias Model =
     , movingPost : Maybe Post.Model
     , draggedOverPost : Maybe Post.Model
     , droppedOnPost : Maybe Post.Model
+    , movingSection : Maybe Section.Model
+    , draggedOverSection : Maybe Section.Model
+    , droppedOnSection : Maybe Section.Model
     , accordionState : Accordion.State
     , loadingError : String
     }
@@ -48,6 +51,9 @@ init =
       , movingPost = Nothing
       , draggedOverPost = Nothing
       , droppedOnPost = Nothing
+      , movingSection = Nothing
+      , draggedOverSection = Nothing
+      , droppedOnSection = Nothing
       , currentSection = Nothing
       }
     , (getIssue 515)
@@ -65,6 +71,10 @@ type Msg
     | DragOver Post.Model
     | AccordionMsg Accordion.State
     | LoadIssue (Result Http.Error Issue.Model)
+    | SectionDragStart Section.Model
+    | SectionDragEnd
+    | SectionDropOn Section.Model
+    | SectionDragOver Section.Model
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -109,6 +119,39 @@ update msg model =
             , Cmd.none
             )
 
+        SectionDragStart section ->
+            ( { model
+                | movingSection = Just section
+              }
+            , Cmd.none
+            )
+
+        SectionDragEnd ->
+            ( { model
+                | movingSection = Nothing
+                , draggedOverSection = Nothing
+              }
+            , Cmd.none
+            )
+
+        SectionDropOn section ->
+            let
+                droppedOnModel =
+                    moveMovingSection model section
+            in
+                ( { droppedOnModel
+                    | droppedOnSection = Just section
+                  }
+                , Cmd.none
+                )
+
+        SectionDragOver section ->
+            ( { model
+                | draggedOverSection = Just section
+              }
+            , Cmd.none
+            )
+
         LoadIssue (Ok issue) ->
             ( { model | issue = issue }, Cmd.none )
 
@@ -147,7 +190,7 @@ removeMovingPost model =
         currentSection =
             case model.currentSection of
                 Nothing ->
-                    Debug.crash "asdfasdf"
+                    Debug.crash "model.currentSection is Nothing"
 
                 Just currentSection ->
                     currentSection
@@ -299,6 +342,98 @@ renumberPosts model =
 
 
 
+-- Section functions
+
+
+moveMovingSection : Model -> Section.Model -> Model
+moveMovingSection model here =
+    renumberSections (insertMovingSection (removeMovingSection model) here)
+
+
+removeMovingSection : Model -> Model
+removeMovingSection model =
+    let
+        movingSection =
+            case model.movingSection of
+                Nothing ->
+                    Debug.crash "asdfasdf"
+
+                Just movingSection ->
+                    movingSection
+
+        issue =
+            model.issue
+
+        newIssue =
+            { issue
+                | sections =
+                    (List.filter (\s -> s /= movingSection) issue.sections)
+            }
+    in
+        { model
+            | issue = newIssue
+        }
+
+
+insertMovingSection : Model -> Section.Model -> Model
+insertMovingSection model here =
+    let
+        head =
+            List.take (here.position - 1) model.issue.sections
+
+        tail =
+            List.drop (here.position - 1) model.issue.sections
+
+        movingSection =
+            case model.movingSection of
+                Nothing ->
+                    Debug.crash "what a joke"
+
+                Just movingSection ->
+                    movingSection
+
+        isNotMovingSection section =
+            section /= movingSection
+
+        headless =
+            List.filter isNotMovingSection head
+
+        tailless =
+            List.filter isNotMovingSection tail
+
+        issue =
+            model.issue
+
+        newIssue =
+            { issue
+                | sections = headless ++ [ movingSection ] ++ tailless
+            }
+    in
+        { model
+            | issue = newIssue
+        }
+
+
+renumberSections : Model -> Model
+renumberSections model =
+    let
+        renumber idx section =
+            { section | position = idx + 1 }
+
+        issue =
+            model.issue
+
+        newIssue =
+            { issue
+                | sections = List.indexedMap renumber model.issue.sections
+            }
+    in
+        { model
+            | issue = newIssue
+        }
+
+
+
 -- View
 
 
@@ -314,26 +449,44 @@ view model =
                 [ Grid.col []
                     [ Accordion.config AccordionMsg
                         |> Accordion.withAnimation
-                        |> Accordion.cards (List.map sectionView sortedSections)
+                        |> Accordion.cards (List.map (sectionView model) sortedSections)
                         |> Accordion.view model.accordionState
                     ]
                 ]
             ]
 
 
-sectionView : Section.Model -> Accordion.Card Msg
-sectionView section =
-    Accordion.card
-        { id = toString section.id
-        , options = []
-        , header =
-            Accordion.header [] <|
-                Accordion.toggle []
-                    [ text
-                        section.name
-                    ]
-        , blocks = [ Accordion.block [] (postsView section.posts) ]
-        }
+sectionView : Model -> Section.Model -> Accordion.Card Msg
+sectionView model section =
+    let
+        baseAttrs =
+            [ attribute "draggable" "true" ]
+
+        attrs =
+            case model.movingPost of
+                Nothing ->
+                    baseAttrs
+                        ++ [ onDragOver <| SectionDragOver section
+                           , onDragStart <| SectionDragStart section
+                           , onDragEnd <| SectionDragEnd
+                           , onDrop <| SectionDropOn section
+                           ]
+
+                Just movingPost ->
+                    baseAttrs
+    in
+        Accordion.card
+            { id = toString section.id
+            , options =
+                [ Card.attrs attrs ]
+            , header =
+                Accordion.header [] <|
+                    Accordion.toggle []
+                        [ text
+                            section.name
+                        ]
+            , blocks = [ Accordion.block [] (postsView section.posts) ]
+            }
 
 
 postsView : List Post.Model -> List (Block.Item Msg)
