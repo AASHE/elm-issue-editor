@@ -1,15 +1,19 @@
 module IssueEditor exposing (..)
 
 import Bootstrap.Accordion as Accordion
+import Bootstrap.Button as Button
+import Bootstrap.ButtonGroup as ButtonGroup
 import Bootstrap.CDN as CDN
 import Bootstrap.Card as Card
 import Bootstrap.Card.Block as Block
 import Bootstrap.Grid as Grid
+import Bootstrap.Utilities.Spacing as Spacing
 import Debug exposing (log)
+import DragAndDropEvents exposing (onDragStart, onDragOver, onDragEnd, onDrop)
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Html.Events exposing (onClick)
 import Http exposing (..)
-import DragAndDropEvents exposing (onDragStart, onDragOver, onDragEnd, onDrop)
 import Issue exposing (..)
 import Post exposing (..)
 import Section exposing (..)
@@ -40,6 +44,7 @@ type alias Model =
     , droppedOnSection : Maybe Section.Model
     , accordionState : Accordion.State
     , loadingError : String
+    , sectionsToSave : List Section.Model
     }
 
 
@@ -55,6 +60,7 @@ init =
       , draggedOverSection = Nothing
       , droppedOnSection = Nothing
       , currentSection = Nothing
+      , sectionsToSave = []
       }
     , (getIssue 515)
     )
@@ -75,6 +81,7 @@ type Msg
     | SectionDragEnd
     | SectionDropOn Section.Model
     | SectionDragOver Section.Model
+    | SaveSectionOrder Section.Model
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -152,6 +159,18 @@ update msg model =
             , Cmd.none
             )
 
+        SaveSectionOrder section ->
+            -- Eventually make call to server to save order.
+            -- For now, just remove section from model.sectionsToSave.
+            ( { model
+                | sectionsToSave =
+                    List.filter
+                        (\s -> s.id /= section.id)
+                        model.sectionsToSave
+              }
+            , Cmd.none
+            )
+
         LoadIssue (Ok issue) ->
             ( { model | issue = issue }, Cmd.none )
 
@@ -181,7 +200,34 @@ getSectionForPost model post =
 
 moveMovingPost : Model -> Post.Model -> Model
 moveMovingPost model here =
-    renumberPosts (insertMovingPost (removeMovingPost model) here)
+    let
+        modifiedModel =
+            renumberPosts
+                (insertMovingPost
+                    (removeMovingPost model)
+                    here
+                )
+
+        movingPost =
+            case model.movingPost of
+                Nothing ->
+                    Debug.crash "model.movingPost is Nothing"
+
+                Just movingPost ->
+                    movingPost
+
+        sectionToSave =
+            getSectionForPost model movingPost
+
+        sectionsToSave =
+            if List.member sectionToSave.id (List.map .id model.sectionsToSave) then
+                model.sectionsToSave
+            else
+                model.sectionsToSave ++ [ sectionToSave ]
+    in
+        { modifiedModel
+            | sectionsToSave = sectionsToSave
+        }
 
 
 removeMovingPost : Model -> Model
@@ -474,6 +520,9 @@ sectionView model section =
 
                 Just movingPost ->
                     baseAttrs
+
+        showSaveButton =
+            List.member section.id (List.map .id model.sectionsToSave)
     in
         Accordion.card
             { id = toString section.id
@@ -484,9 +533,40 @@ sectionView model section =
                     Accordion.toggle []
                         [ text
                             section.name
+                        , if showSaveButton then
+                            Button.button
+                                [ Button.warning
+                                , Button.small
+                                , Button.attrs
+                                    [ onClick (SaveSectionOrder section)
+                                    , Spacing.ml2
+                                    ]
+                                ]
+                                [ text "Save Section Order" ]
+                          else
+                            text ""
                         ]
             , blocks = [ Accordion.block [] (postsView section.posts) ]
             }
+
+
+
+-- <div class="pull-right btn-group btn-group-xs" role="group" class="btn btn-default">
+--   <a class="btn btn-default"
+--      href="{% url "bulletin:plugins:update" post.content_type.model post.id %}?next={{ request.get_full_path }}"
+--      title="Edit post">
+--     {% bootstrap_icon "pencil" %}
+--     Edit Post
+--   </a>
+  -- <div class="panel-group post-accordion"
+  --      id="post-accordion-{{ post.id }}">
+  --   <div class="panel panel-default">
+  --     <div class="panel-heading">
+  --       <h4 class="panel-title">
+  --         <a data-toggle="collapse" data-parent="#post-accordion-{{ post.id }}"
+  --            href="#collapsePost{{ post.id }}">
+  --           {{ post.title }}
+  --         </a>
 
 
 postsView : List Post.Model -> List (Block.Item Msg)
@@ -511,7 +591,17 @@ postView post =
                 ]
             ]
             |> Card.block []
-                [ Block.text [] [ text post.title ] ]
+                [ Block.text []
+                      [
+                       text post.title
+                      , ButtonGroup.buttonGroup
+                          [ ButtonGroup.small
+                          , ButtonGroup.attrs [ class "pull-right" ] ]
+                           [ ButtonGroup.button [ Button.secondary ]
+                                 [ text "Edit Post "]
+                           ]
+                      ]
+                ]
             |> Card.view
         )
 
