@@ -2,7 +2,6 @@ module IssueEditor exposing (..)
 
 import Bootstrap.Accordion as Accordion
 import Bootstrap.Button as Button
-import Bootstrap.ButtonGroup as ButtonGroup
 import Bootstrap.CDN as CDN
 import Bootstrap.Card as Card
 import Bootstrap.Card.Block as Block
@@ -16,6 +15,10 @@ import Html.Events exposing (onClick)
 import Http exposing (..)
 import Issue exposing (..)
 import Post exposing (..)
+
+
+-- import RemoteData exposing (WebData)
+
 import Section exposing (..)
 
 
@@ -33,15 +36,27 @@ main =
 -- Model
 
 
+type DraggingState
+    = DraggingPost Post.Model
+    | DraggingSection Section.Model
+    | NotDragging
+
+
 type alias Model =
     { issue : Issue.Model
+
+    -- only when we're dragging a Post:
     , currentSection : Maybe Section.Model
     , movingPost : Maybe Post.Model
     , draggedOverPost : Maybe Post.Model
     , droppedOnPost : Maybe Post.Model
+
+    -- only when we're dragging a section:
     , movingSection : Maybe Section.Model
     , draggedOverSection : Maybe Section.Model
     , droppedOnSection : Maybe Section.Model
+
+    --
     , accordionState : Accordion.State
     , loadingError : String
     , sectionsToSave : List Section.Model
@@ -62,7 +77,7 @@ init =
       , currentSection = Nothing
       , sectionsToSave = []
       }
-    , (getIssue 515)
+    , (getIssue 472)
     )
 
 
@@ -71,23 +86,24 @@ init =
 
 
 type Msg
-    = DragStart Post.Model
-    | DragEnd
-    | DropOn Post.Model
-    | DragOver Post.Model
+    = PostDragStart Post.Model
+    | PostDragEnd
+    | PostDropOn Post.Model
+    | PostDragOver Post.Model
     | AccordionMsg Accordion.State
     | LoadIssue (Result Http.Error Issue.Model)
     | SectionDragStart Section.Model
     | SectionDragEnd
     | SectionDropOn Section.Model
     | SectionDragOver Section.Model
-    | SaveSectionOrder Section.Model
+    | SaveSection Section.Model
+    | OnSectionSave (Result Http.Error Section.Model)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        DragStart post ->
+        PostDragStart post ->
             let
                 currentSection =
                     (getSectionForPost model post)
@@ -99,7 +115,7 @@ update msg model =
                 , Cmd.none
                 )
 
-        DragEnd ->
+        PostDragEnd ->
             ( { model
                 | movingPost = Nothing
                 , draggedOverPost = Nothing
@@ -108,7 +124,7 @@ update msg model =
             , Cmd.none
             )
 
-        DropOn post ->
+        PostDropOn post ->
             let
                 droppedOnModel =
                     moveMovingPost model post
@@ -119,7 +135,7 @@ update msg model =
                 , Cmd.none
                 )
 
-        DragOver post ->
+        PostDragOver post ->
             ( { model
                 | draggedOverPost = Just post
               }
@@ -159,8 +175,8 @@ update msg model =
             , Cmd.none
             )
 
-        SaveSectionOrder section ->
-            -- Eventually make call to server to save order.
+        SaveSection section ->
+            -- Eventually make call to server to save section.
             -- For now, just remove section from model.sectionsToSave.
             ( { model
                 | sectionsToSave =
@@ -168,13 +184,32 @@ update msg model =
                         (\s -> s.id /= section.id)
                         model.sectionsToSave
               }
-            , Cmd.none
+            , saveSectionCmd section
             )
 
         LoadIssue (Ok issue) ->
             ( { model | issue = issue }, Cmd.none )
 
         LoadIssue (Err msg) ->
+            ( { model
+                | loadingError = toString msg
+              }
+            , Cmd.none
+            )
+
+        OnSectionSave (Ok section) ->
+            let
+                otherSections =
+                    List.filter (\s -> s.id /= section.id) model.issue.sections
+
+                issue =
+                    model.issue
+            in
+                ( { model | issue = { issue | sections = otherSections ++ [ section ] } }
+                , Cmd.none
+                )
+
+        OnSectionSave (Err msg) ->
             ( { model | loadingError = toString msg }, Cmd.none )
 
         AccordionMsg state ->
@@ -378,7 +413,8 @@ renumberPosts model =
         newIssue =
             { issue
                 | sections =
-                    (List.filter (\s -> s.id /= currentSection.id) issue.sections) ++ [ newSection ]
+                    (List.filter (\s -> s.id /= currentSection.id) issue.sections)
+                        ++ [ newSection ]
             }
     in
         { model
@@ -489,17 +525,21 @@ view model =
         sortedSections =
             List.sortBy .position model.issue.sections
     in
-        Grid.container []
-            [ CDN.stylesheet
-            , Grid.row []
-                [ Grid.col []
-                    [ Accordion.config AccordionMsg
-                        |> Accordion.withAnimation
-                        |> Accordion.cards (List.map (sectionView model) sortedSections)
-                        |> Accordion.view model.accordionState
+        if not (String.isEmpty model.loadingError) then
+            text model.loadingError
+        else
+            Grid.container []
+                [ CDN.stylesheet
+                , Grid.row []
+                    [ Grid.col []
+                        [ Accordion.config AccordionMsg
+                            |> Accordion.withAnimation
+                            |> Accordion.cards
+                                (List.map (sectionView model) sortedSections)
+                            |> Accordion.view model.accordionState
+                        ]
                     ]
                 ]
-            ]
 
 
 sectionView : Model -> Section.Model -> Accordion.Card Msg
@@ -538,7 +578,7 @@ sectionView model section =
                                 [ Button.warning
                                 , Button.small
                                 , Button.attrs
-                                    [ onClick (SaveSectionOrder section)
+                                    [ onClick (SaveSection section)
                                     , Spacing.ml2
                                     ]
                                 ]
@@ -558,15 +598,15 @@ sectionView model section =
 --     {% bootstrap_icon "pencil" %}
 --     Edit Post
 --   </a>
-  -- <div class="panel-group post-accordion"
-  --      id="post-accordion-{{ post.id }}">
-  --   <div class="panel panel-default">
-  --     <div class="panel-heading">
-  --       <h4 class="panel-title">
-  --         <a data-toggle="collapse" data-parent="#post-accordion-{{ post.id }}"
-  --            href="#collapsePost{{ post.id }}">
-  --           {{ post.title }}
-  --         </a>
+-- <div class="panel-group post-accordion"
+--      id="post-accordion-{{ post.id }}">
+--   <div class="panel panel-default">
+--     <div class="panel-heading">
+--       <h4 class="panel-title">
+--         <a data-toggle="collapse" data-parent="#post-accordion-{{ post.id }}"
+--            href="#collapsePost{{ post.id }}">
+--           {{ post.title }}
+--         </a>
 
 
 postsView : List Post.Model -> List (Block.Item Msg)
@@ -584,23 +624,15 @@ postView post =
         (Card.config
             [ Card.attrs
                 [ attribute "draggable" "true"
-                , onDragOver <| DragOver post
-                , onDragStart <| DragStart post
-                , onDragEnd <| DragEnd
-                , onDrop <| DropOn post
+                , onDragOver <| PostDragOver post
+                , onDragStart <| PostDragStart post
+                , onDragEnd <| PostDragEnd
+                , onDrop <| PostDropOn post
                 ]
             ]
             |> Card.block []
                 [ Block.text []
-                      [
-                       text post.title
-                      , ButtonGroup.buttonGroup
-                          [ ButtonGroup.small
-                          , ButtonGroup.attrs [ class "pull-right" ] ]
-                           [ ButtonGroup.button [ Button.secondary ]
-                                 [ text "Edit Post "]
-                           ]
-                      ]
+                    [ text post.title ]
                 ]
             |> Card.view
         )
@@ -619,10 +651,39 @@ subscriptions model =
 -- HTTP
 
 
+baseUrl : String
+baseUrl =
+    "https://aashe-bulletin-stage.herokuapp.com/api"
+
+
 getIssue : Int -> Cmd Msg
 getIssue id =
     let
         url =
-            "http://bulletin.aashe.org/api/issue/" ++ toString id ++ "/"
+            baseUrl ++ "/issue/" ++ toString id
     in
         Http.send LoadIssue (Http.get url decodeIssue)
+
+
+saveSectionUrl : Int -> String
+saveSectionUrl sectionId =
+    baseUrl ++ "/section/" ++ toString sectionId
+
+
+saveSectionRequest : Section.Model -> Http.Request Section.Model
+saveSectionRequest section =
+    Http.request
+        { body = Section.encodeSection section |> Http.jsonBody
+        , expect = Http.expectJson Section.decodeSection
+        , headers = []
+        , method = "PUT"
+        , timeout = Nothing
+        , url = saveSectionUrl section.id
+        , withCredentials = False
+        }
+
+
+saveSectionCmd : Section.Model -> Cmd Msg
+saveSectionCmd section =
+    saveSectionRequest section
+        |> Http.send OnSectionSave
