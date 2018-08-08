@@ -1,5 +1,6 @@
 module IssueEditor exposing (..)
 
+import BasicAuth exposing (buildAuthorizationHeader)
 import Bootstrap.Accordion as Accordion
 import Bootstrap.Button as Button
 import Bootstrap.CDN as CDN
@@ -60,6 +61,7 @@ type alias Model =
     , accordionState : Accordion.State
     , loadingError : String
     , sectionsToSave : List Section.Model
+    , postsToSave : List Post.Model
     }
 
 
@@ -76,6 +78,7 @@ init =
       , droppedOnSection = Nothing
       , currentSection = Nothing
       , sectionsToSave = []
+      , postsToSave = []
       }
     , (getIssue 472)
     )
@@ -97,6 +100,8 @@ type Msg
     | SectionDropOn Section.Model
     | SectionDragOver Section.Model
     | SaveSection Section.Model
+    | SaveSectionPosts Section.Model
+    | OnPostSave (Result Http.Error Post.Model)
     | OnSectionSave (Result Http.Error Section.Model)
 
 
@@ -176,8 +181,6 @@ update msg model =
             )
 
         SaveSection section ->
-            -- Eventually make call to server to save section.
-            -- For now, just remove section from model.sectionsToSave.
             ( { model
                 | sectionsToSave =
                     List.filter
@@ -186,6 +189,15 @@ update msg model =
               }
             , saveSectionCmd section
             )
+
+        SaveSectionPosts section ->
+            let
+                postCmds =
+                    List.map (\p -> savePostCmd p) section.posts
+            in
+                ( { model | postsToSave = section.posts }
+                , Cmd.batch postCmds
+                )
 
         LoadIssue (Ok issue) ->
             ( { model | issue = issue }, Cmd.none )
@@ -196,6 +208,16 @@ update msg model =
               }
             , Cmd.none
             )
+
+        OnPostSave (Ok post) ->
+            let
+                newPostsToSave =
+                    List.filter (\post -> post.id /= post.id) model.postsToSave
+            in
+                ( { model | postsToSave = newPostsToSave }, Cmd.none )
+
+        OnPostSave (Err msg) ->
+            ( { model | loadingError = toString msg }, Cmd.none )
 
         OnSectionSave (Ok section) ->
             let
@@ -578,35 +600,16 @@ sectionView model section =
                                 [ Button.warning
                                 , Button.small
                                 , Button.attrs
-                                    [ onClick (SaveSection section)
+                                    [ onClick (SaveSectionPosts section)
                                     , Spacing.ml2
                                     ]
                                 ]
-                                [ text "Save Section Order" ]
+                                [ text "Save Post Order" ]
                           else
                             text ""
                         ]
             , blocks = [ Accordion.block [] (postsView section.posts) ]
             }
-
-
-
--- <div class="pull-right btn-group btn-group-xs" role="group" class="btn btn-default">
---   <a class="btn btn-default"
---      href="{% url "bulletin:plugins:update" post.content_type.model post.id %}?next={{ request.get_full_path }}"
---      title="Edit post">
---     {% bootstrap_icon "pencil" %}
---     Edit Post
---   </a>
--- <div class="panel-group post-accordion"
---      id="post-accordion-{{ post.id }}">
---   <div class="panel panel-default">
---     <div class="panel-heading">
---       <h4 class="panel-title">
---         <a data-toggle="collapse" data-parent="#post-accordion-{{ post.id }}"
---            href="#collapsePost{{ post.id }}">
---           {{ post.title }}
---         </a>
 
 
 postsView : List Post.Model -> List (Block.Item Msg)
@@ -653,7 +656,8 @@ subscriptions model =
 
 baseUrl : String
 baseUrl =
-    "https://aashe-bulletin-stage.herokuapp.com/api"
+    -- "https://aashe-bulletin-stage.herokuapp.com/api"
+    "http://127.0.0.1:7000/api"
 
 
 getIssue : Int -> Cmd Msg
@@ -663,6 +667,31 @@ getIssue id =
             baseUrl ++ "/issue/" ++ toString id
     in
         Http.send LoadIssue (Http.get url decodeIssue)
+
+
+savePostUrl : Int -> String
+savePostUrl postId =
+    baseUrl ++ "/post/" ++ toString postId
+
+
+savePostRequest : Post.Model -> Http.Request Post.Model
+savePostRequest post =
+    Http.request
+        { body = Post.encodePost post |> Http.jsonBody
+        , expect = Http.expectJson Post.decodePost
+        , headers =
+            [ buildAuthorizationHeader "superman" "krypton" ]
+        , method = "PUT"
+        , timeout = Nothing
+        , url = savePostUrl post.id
+        , withCredentials = True
+        }
+
+
+savePostCmd : Post.Model -> Cmd Msg
+savePostCmd post =
+    savePostRequest post
+        |> Http.send OnPostSave
 
 
 saveSectionUrl : Int -> String
@@ -675,7 +704,8 @@ saveSectionRequest section =
     Http.request
         { body = Section.encodeSection section |> Http.jsonBody
         , expect = Http.expectJson Section.decodeSection
-        , headers = []
+        , headers =
+            [ buildAuthorizationHeader "superman" "krypton" ]
         , method = "PUT"
         , timeout = Nothing
         , url = saveSectionUrl section.id
