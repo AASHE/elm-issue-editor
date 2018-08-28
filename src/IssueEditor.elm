@@ -37,12 +37,6 @@ main =
 -- Model
 
 
-type DraggingState
-    = DraggingPost Post.Model
-    | DraggingSection Section.Model
-    | NotDragging
-
-
 type alias Model =
     { issue : Issue.Model
 
