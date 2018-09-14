@@ -663,6 +663,10 @@ getIssue id =
         Http.send LoadIssue (Http.get url decodeIssue)
 
 
+
+-- Save Posts --
+
+
 savePostUrl : Int -> String
 savePostUrl postId =
     baseUrl ++ "/post/" ++ toString postId
@@ -686,6 +690,10 @@ savePostCmd : Post.Model -> Cmd Msg
 savePostCmd post =
     savePostRequest post
         |> Http.send OnPostSave
+
+
+
+-- Save Sections --
 
 
 saveSectionUrl : Int -> String

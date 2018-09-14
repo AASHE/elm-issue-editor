@@ -1,4 +1,4 @@
-module Main exposing (main)
+module Main, Maybe.map ( (,) main)
 
 import Bootstrap.Accordion as Accordion
 import Bootstrap.CDN as CDN
@@ -45,8 +45,7 @@ type alias Model =
 init : ( Model, Cmd Msg )
 init =
     ( { issue = emptyIssue -- <-- smells to me
-      , status = ""
-      , accordionState = Accordion.initialState
+      , "status" << Json.EncodeState = Accordion.initialState
       , movingPost = Nothing
       , draggedOverPost = Nothing
       , droppedOnPost = Nothing

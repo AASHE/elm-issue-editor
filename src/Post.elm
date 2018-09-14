@@ -6,7 +6,7 @@ import Json.Encode
 import Maybe.Extra
 
 
-type alias Post =
+type alias Model =
     { id : Int
     , title : String
     , url : String
@@ -26,19 +26,19 @@ type alias Post =
     }
 
 
-decodePost : JD.Decoder Post
+decodePost : JD.Decoder Model
 decodePost =
-    decode Post
+    decode Model
         |> required "id" JD.int
         |> required "title" JD.string
         |> required "url" JD.string
         |> required "approved" JD.bool
-        |> required "pubDate" JD.string
+        |> required "pub_date" JD.string
         |> required "submitter" JD.int
         |> required "position" JD.int
-        |> required "postType" JD.string
-        |> optional "startDate" (JD.map Just JD.string) Nothing
-        |> optional "endDate" (JD.map Just JD.string) Nothing
+        |> required "post_type" JD.string
+        |> optional "start_date" (JD.map Just JD.string) Nothing
+        |> optional "end_date" (JD.map Just JD.string) Nothing
         |> optional "time" (JD.map Just JD.string) Nothing
         |> optional "organization" (JD.map Just JD.string) Nothing
         |> optional "location" (JD.map Just JD.string) Nothing
@@ -47,24 +47,24 @@ decodePost =
         |> optional "date" (JD.map Just JD.string) Nothing
 
 
-encodePost : Post -> Json.Encode.Value
-encodePost record =
-    [ Just ( "id", Json.Encode.int record.id )
-    , Just ( "title", Json.Encode.string record.title )
-    , Just ( "url", Json.Encode.string record.url )
-    , Just ( "approved", Json.Encode.bool record.approved )
-    , Just ( "pubDate", Json.Encode.string record.pubDate )
-    , Just ( "submitter", Json.Encode.int record.submitter )
-    , Just ( "position", Json.Encode.int record.position )
-    , Just ( "postType", Json.Encode.string record.postType )
-    , Maybe.map ((,) "startDate" << Json.Encode.string) record.startDate
-    , Maybe.map ((,) "endDate" << Json.Encode.string) record.endDate
-    , Maybe.map ((,) "time" << Json.Encode.string) record.time
-    , Maybe.map ((,) "organization" << Json.Encode.string) record.organization
-    , Maybe.map ((,) "location" << Json.Encode.string) record.location
-    , Maybe.map ((,) "organization" << Json.Encode.string) record.organization
-    , Maybe.map ((,) "blurb" << Json.Encode.string) record.blurb
-    , Maybe.map ((,) "date" << Json.Encode.string) record.date
+encodePost : Model -> Json.Encode.Value
+encodePost model =
+    [ Just ( "id", Json.Encode.int model.id )
+    , Just ( "title", Json.Encode.string model.title )
+    , Just ( "url", Json.Encode.string model.url )
+    , Just ( "approved", Json.Encode.bool model.approved )
+    , Just ( "pubDate", Json.Encode.string model.pubDate )
+    , Just ( "submitter", Json.Encode.int model.submitter )
+    , Just ( "position", Json.Encode.int model.position )
+    , Just ( "postType", Json.Encode.string model.postType )
+    , Maybe.map ((,) "startDate" << Json.Encode.string) model.startDate
+    , Maybe.map ((,) "endDate" << Json.Encode.string) model.endDate
+    , Maybe.map ((,) "time" << Json.Encode.string) model.time
+    , Maybe.map ((,) "organization" << Json.Encode.string) model.organization
+    , Maybe.map ((,) "location" << Json.Encode.string) model.location
+    , Maybe.map ((,) "organization" << Json.Encode.string) model.organization
+    , Maybe.map ((,) "blurb" << Json.Encode.string) model.blurb
+    , Maybe.map ((,) "date" << Json.Encode.string) model.date
     ]
         |> Maybe.Extra.values
         |> Json.Encode.object
