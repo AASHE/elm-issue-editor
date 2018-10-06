@@ -96,10 +96,10 @@ renderIssue issue accordionState =
 renderSection : Section -> Accordion.Card Msg
 renderSection section =
     Accordion.card
-        { id = section.name
+     { id = section.name
         , options = []
         , header =
-            Accordion.header [] <|
+            Accordion.header [ attribute "draggable" "true" ] <|
                 Accordion.toggle []
                     [ text
                         (section.name
@@ -113,12 +113,15 @@ renderSection section =
         }
 
 
+
 renderPost :
     Post
     -> Block.Item msg -- TODO what is `msg`?
 renderPost post =
     Block.custom
-        (Card.config [ Card.attrs [ attribute "draggable" "true" ] ]
+        (Card.config [ Card.attrs [attribute "draggable" "true"
+                                  ]
+                     ]
             |> Card.block []
                 [ Block.text [] [ text post.title ] ]
             |> Card.view
