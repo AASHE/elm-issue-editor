@@ -16,8 +16,6 @@ all =
                 Expect.equal True False
         ]
 
-postId = 1799
-
 getPost =
     let
         request = Http.get "http://bulletin.aashe.org/api/post/1799/" Post.decodePost

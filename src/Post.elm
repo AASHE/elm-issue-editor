@@ -1,4 +1,4 @@
-module Post exposing (Post, decodePost, encodePost)
+module Post exposing (..)
 
 import Json.Encode
 import Json.Decode exposing (field)
@@ -7,7 +7,7 @@ import Json.Decode.Pipeline
 import Link exposing (Link, decodeLink, encodeLink)
 
 
-type alias Post =
+type alias Model =
     { id : Int
     , title : String
     , url : String
@@ -18,9 +18,9 @@ type alias Post =
     , links : List Link
     }
 
-decodePost : Json.Decode.Decoder Post
+decodePost : Json.Decode.Decoder Model
 decodePost =
-    Json.Decode.Pipeline.decode Post
+    Json.Decode.Pipeline.decode Model
         |> Json.Decode.Pipeline.required "id" (Json.Decode.int)
         |> Json.Decode.Pipeline.required "title" (Json.Decode.string)
         |> Json.Decode.Pipeline.required "url" (Json.Decode.string)
@@ -30,7 +30,7 @@ decodePost =
         |> Json.Decode.Pipeline.required "position" (Json.Decode.int)
         |> Json.Decode.Pipeline.required "links" (Json.Decode.list decodeLink)
 
-encodePost : Post -> Json.Encode.Value
+encodePost : Model -> Json.Encode.Value
 encodePost record =
     Json.Encode.object
         [ ("id",  Json.Encode.int <| record.id)
