@@ -221,7 +221,10 @@ update msg model =
                 issue =
                     model.issue
             in
-                ( { model | issue = { issue | sections = otherSections ++ [ section ] } }
+                ( { model
+                    | issue =
+                        { issue | sections = otherSections ++ [ section ] }
+                  }
                 , Cmd.none
                 )
 
